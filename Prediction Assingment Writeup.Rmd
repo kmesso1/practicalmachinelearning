@@ -1,0 +1,113 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Kelsey Messonnier"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, my goal was to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+#How the Model was Built
+##Reproducibility
+
+The participants were asked to do unilateral bicep burls in five different ways:
+
+* Class A - exactly according to specification
+* Class B - throwing the elbows to the front
+* Class C - lifting the dumbbell only halfway
+* Class D - lowering the dumbbell only halfway
+* Class E - throwing the hips to the front. 
+
+The model was built to predict in which of these five ways an exercise was done. 
+
+In order to create reproducible results, a seed of 1000 should be set and all the libraries should be loaded in R.
+```{r}
+#Set the seed for reproducibility
+set.seed(1000)
+
+#Load libraries
+library(ggplot2)
+library(lattice)
+library(caret)
+library(randomForest)
+```
+
+##Data Preparation 
+
+Several columns needed to be removed from the data before it could be used to model. The ID, username, any timestamps, and any window columns were removed (columns 1 through 7). Then any columns that had more than 75% of data missing were removed. This was done by calculating the rate of missing data for each column.
+
+```{r}
+
+#Import data file
+training_data <- read.csv ("pml-training.csv", header = TRUE, sep = ",", stringsAsFactors = TRUE)
+validation_data <- read.csv ("pml-testing.csv", header = TRUE, sep = ",", stringsAsFactors = TRUE)
+
+#Remove ID and timestamp columns
+training_data <- training_data[,-c(1:7)]
+validation_data <- validation_data[,-c(1:7)]
+
+#Remove columns with more than 75% missing data
+training_data[training_data == ""] <- NA
+NAs1 <- apply(training_data, 2, function(x) sum(is.na(x)))/nrow(training_data)
+training_data <- training_data[NAs1<0.75]
+
+#validation_data <- validation_data[,colSums(is.na(validation_data)) == ""]
+validation_data[validation_data == ""] <- NA
+NAs2 <- apply(validation_data, 2, function(x) sum(is.na(x)))/nrow(validation_data)
+validation_data <- validation_data[NAs2<0.75]
+```
+
+##Cross Validation
+
+The training data provided was split into two datasets: 75% for training the model and 25% for testing the model. 
+```{r}
+#Partition dataset into testing and training for cross validation
+inTrain = createDataPartition(training_data$classe, p = 3/4)[[1]]
+training = training_data[ inTrain,]
+testing = training_data[-inTrain,]
+```
+
+Below we look at the dimensions of the new training and testing datasets.
+```{r}
+dim(training)
+dim(testing)
+
+plot(training$classe, main = "Distribution of Target Variable Levels (Classe) in Training Data", xlab = "Classe", ylab = "Frequency")
+```
+
+The graph above shows the frequency of the different categories (A, B, C, D, and E) in the training data. 
+
+#Prediction Model: Random Forest
+
+I decided to use a random forest model because they are useful for categorizing data and correcting overfitting. 
+```{r}
+#Create model
+rf <- randomForest(classe ~ ., data=training)
+rf
+
+#Predict on testing dataset
+confusionMatrix(testing$classe, predict(rf, testing))
+```
+
+The random forest model accuracy is 0.996, with 95% Confidence Interval (0.994, 0.998). The expected out of sample effor is 0.45%. The sensitivity is between 0.991 and 0.999 for all classes of exercise A through E. The specificity is between 0.998 and 1.000 for all classes of exercise. 
+
+#Final Validation of Model
+##Predict 20 Test Cases
+
+Below shows the results of the random forest model applied to the validation dataset. 
+
+```{r}
+val_prediction <- predict(rf, validation_data)
+val_prediction
+
+plot(val_prediction, main = "Distribution of Target Variable Levels (Classe) in Validation Data", xlab = "Classe", ylab = "Frequency")
+```
+
+The graph above shows the frequency distribution for the target variable in the 20 case validation dataset.
